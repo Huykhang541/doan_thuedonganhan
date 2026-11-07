@@ -1,0 +1,58 @@
+1. Nhóm 2xx: Thành Công (Success)
+Nhóm này báo hiệu mọi thứ đều ổn.
+
+- 200 OK: Thành công chung chung.
+
++ Dùng khi: Đăng nhập thành công, lấy danh sách user, lấy profile.
+
++ Code: res.status(200).json({ data: ... })
+
+- 201 Created: Tạo mới thành công.
+
++ Dùng khi: Đăng ký tài khoản mới (/register), Tạo đơn hàng mới, Thêm sản phẩm vào giỏ.
+
++ Code: res.status(201).json({ message: "User created" })
+
+- 204 No Content: Thành công nhưng không trả về dữ liệu gì.
+
++ Dùng khi: Xóa dữ liệu (Delete user/product) thành công và không cần gửi lại gì cả.
+
+2. Nhóm 4xx: Lỗi Do Client (Client Error)
+Lỗi này là do người dùng (hoặc Frontend) gửi dữ liệu sai. Server vẫn ổn.
+
+- 400 Bad Request: Dữ liệu gửi lên không hợp lệ hoặc thiếu.
+
++ Dùng khi: Thiếu email/pass khi đăng nhập, định dạng email sai.
+
++ Ví dụ: if (!email || !password) return res.status(400)...
+
+- 401 Unauthorized: Chưa xác thực (Chưa đăng nhập hoặc Token sai).
+
++ Ý nghĩa: "Tôi không biết bạn là ai".
+
++ Dùng khi: Quên gửi Token, Token hết hạn, sai mật khẩu.
+
+- 403 Forbidden: Không có quyền truy cập (Dù đã đăng nhập).
+
++ Ý nghĩa: "Tôi biết bạn là ai, nhưng bạn không đủ tuổi vào đây".
+
++ Dùng khi: User thường cố truy cập API của Admin (Lỗi bạn vừa gặp khi chưa set is_admin=1).
+
+- 404 Not Found: Không tìm thấy tài nguyên.
+
++ Dùng khi: Tìm ID user không tồn tại, sai đường dẫn URL (/api/v1/userr thay vì user).
+
+- 409 Conflict: Xung đột dữ liệu.
+
++ Dùng khi: Đăng ký email đã tồn tại trong Database.
+
+3. Nhóm 5xx: Lỗi Do Server (Server Error)
+Lỗi này là do code của bạn bị sai, hoặc Database bị sập.
+
+- 500 Internal Server Error: Lỗi hệ thống chung chung (Lỗi code).
+
++ Dùng khi: Code bị crash (như lỗi undefined bạn gặp lúc nãy), kết nối Database thất bại.
+
++ Code: catch(err) { return res.status(500)... }
+
+- 502 Bad Gateway / 503 Service Unavailable: Server bị quá tải hoặc đang bảo trì (Thường gặp khi deploy thực tế).
