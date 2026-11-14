@@ -1,14 +1,15 @@
 class User {
   final int id;
-  final String? password; // Cho phép null vì API profile không trả về mật khẩu
+  final String? password; 
   final String? fullname;
   final String? email;
   final String? phone_number;
   final String? address;
+  final String? role; // Bổ sung role gốc từ DB
   final bool isAdmin;
-  final DateTime? createdAt; // Cho phép null
-  final DateTime? updatedAt; // Cho phép null
-  final DateTime? deletedAt; // Cho phép null
+  final DateTime? createdAt; 
+  final DateTime? updatedAt; 
+  final DateTime? deletedAt; 
 
   User({
     required this.id,
@@ -17,6 +18,7 @@ class User {
     this.email,
     this.phone_number,
     this.address,
+    this.role, // Bổ sung
     required this.isAdmin,
     this.createdAt,
     this.updatedAt,
@@ -25,18 +27,16 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      // Dùng ?? để cung cấp giá trị mặc định an toàn nếu backend thiếu dữ liệu
       id: json['id'] as int? ?? 0, 
       password: json['password'] as String?, 
       fullname: json['fullname'] as String?,
       email: json['email'] as String?,
       phone_number: json['phone_number'] as String?,
       address: json['address'] as String?,
+      role: json['role'] as String?, // Ánh xạ role
       
-      // Xử lý is_admin an toàn, tránh lỗi cast type
       isAdmin: (json['is_admin'] as int? ?? 0) == 1, 
       
-      // Xử lý DateTime an toàn bằng tryParse
       createdAt: json['created_at'] != null 
           ? DateTime.tryParse(json['created_at'].toString()) 
           : null,

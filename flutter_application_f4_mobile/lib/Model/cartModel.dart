@@ -21,10 +21,14 @@ class CartResponse {
 class CartItem {
   int? productVariantId;
   String? productName;
-  int? productId; // Đã sửa tên biến cho chuẩn Dart
+  int? productId; 
   double? price;
   int? quantity;
   String? imageUrl;
+  
+  // THÊM 2 TRƯỜNG NÀY
+  int? rentalDays; 
+  double? deposit; 
 
   CartItem({
     this.productVariantId,
@@ -33,6 +37,8 @@ class CartItem {
     this.price,
     this.quantity,
     this.imageUrl,
+    this.rentalDays = 1, // Mặc định là 1 ngày
+    this.deposit = 0.0,  // Mặc định là 0
   });
 
   CartItem copyWith({
@@ -42,6 +48,8 @@ class CartItem {
     String? imageUrl,
     double? price,
     int? quantity,
+    int? rentalDays,
+    double? deposit,
   }) {
     return CartItem(
       productVariantId: productVariantId ?? this.productVariantId,
@@ -50,6 +58,8 @@ class CartItem {
       productId: productId ?? this.productId,
       price: price ?? this.price,
       quantity: quantity ?? this.quantity,
+      rentalDays: rentalDays ?? this.rentalDays,
+      deposit: deposit ?? this.deposit,
     );
   }
 
@@ -61,6 +71,9 @@ class CartItem {
       price: double.tryParse(json['price'].toString()) ?? 0.0,
       quantity: json['quantity'] ?? 1,
       imageUrl: json['image'] ?? '',
+      // Đọc thêm 2 trường này từ Local JSON
+      rentalDays: json['rental_days'] ?? 1,
+      deposit: double.tryParse(json['deposit'].toString()) ?? 0.0,
     );
   }
 }

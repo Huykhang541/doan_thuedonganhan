@@ -7,6 +7,7 @@ import '../../Model/Order.dart';
 import 'admin_order_detail_screen.dart';
 import '../login_screen.dart';
 import '../Widget/order_widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Thêm dòng này lên đầu file
 
 class AdminOrderListScreen extends StatefulWidget {
   const AdminOrderListScreen({super.key});
@@ -66,21 +67,27 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
   String _formatMoney(int amount) => NumberFormat.currency(locale: 'vi_VN', symbol: 'đ').format(amount);
 
   // Định dạng ngày tháng
-  String _formatDate(String dateString) {
+ String _formatDate(String dateString) {
     try {
-      return DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(dateString));
-    } catch (e) { return dateString; }
+      // Đảm bảo chuỗi ngày có chữ 'Z' ở cuối để Flutter hiểu đây là giờ UTC, sau đó dùng .toLocal()
+      String validDate = dateString.endsWith('Z') ? dateString : '${dateString}Z';
+      DateTime parsedDate = DateTime.parse(validDate).toLocal();
+      return DateFormat('dd/MM/yyyy HH:mm').format(parsedDate);
+    } catch (e) { 
+      return dateString; 
+    }
   }
 
   // Lấy màu sắc và chữ hiển thị cho badge trạng thái
   Map<String, dynamic> _getStatusConfig(String status) {
     switch (status.toLowerCase()) {
+      case 'cho_duyet': 
       case 'pending': 
         return {'text': "Chờ xử lý", 'color': Colors.blue, 'bg': const Color(0xFFE3F2FD)};
-      case 'processing': 
-        return {'text': "Đang chuẩn bị", 'color': Colors.deepPurple, 'bg': const Color(0xFFEEE5FF)};
+      case 'confirmed':
       case 'shipping': 
         return {'text': "Đang giao", 'color': Colors.orange, 'bg': const Color(0xFFFFF3E0)};
+      case 'completed':
       case 'delivered': 
         return {'text': "Đã giao", 'color': Colors.green, 'bg': const Color(0xFFE8F5E9)};
       case 'cancelled': 
@@ -122,7 +129,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text("Quản trị đơn hàng", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text("Quản lý đơn thuê", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.primaryOrange,
         centerTitle: true,
         automaticallyImplyLeading: false, // Ẩn nút back mặc định
@@ -160,7 +167,14 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.power_settings_new, color: Colors.white),
-            onPressed: () => Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false),
+            onPressed: () async {
+              // Xóa toàn bộ dữ liệu đăng nhập lưu ở local
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.clear();
+              
+              if (!context.mounted) return;
+              Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+            },
           ),
         ],
       ),
@@ -190,7 +204,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
                 if (_selectedIndex == 0) { // All
                   filteredOrders = allOrders;
                 } else if (_selectedIndex == 1) { // Chờ xử lý
-                  filteredOrders = allOrders.where((o) => o.status == 'pending').toList();
+                  filteredOrders = allOrders.where((o) => ['pending', 'cho_duyet'].contains(o.status.toLowerCase().trim())).toList();
                 } else if (_selectedIndex == 2) { // Chờ lấy hàng
                   filteredOrders = allOrders.where((o) => ['processing', 'shipping'].contains(o.status)).toList();
                 } else { // Lịch sử (Đã giao/Hủy)
@@ -320,6 +334,7 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
           // Dòng 3: Danh sách sản phẩm
           // Nếu đã có list sản phẩm -> Hiển thị luôn
           // Nếu chưa -> Gọi API chi tiết ngay tại đây (Lazy Loading)
+          // Dòng 3: Danh sách sản phẩm
           (order.items != null && order.items!.isNotEmpty)
             ? OrderInfoRow(
                 label: "Sản phẩm", 
@@ -329,16 +344,22 @@ class _AdminOrderListScreenState extends State<AdminOrderListScreen> {
             : FutureBuilder<Order?>(
                 future: _orderController.getOrderDetail(order.id),
                 builder: (context, snapshot) {
-                  if (snapshot.hasData && snapshot.data!.items != null) {
+                  // Đang chờ dữ liệu
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const OrderInfoRow(label: "Sản phẩm", value: "Đang tải...", alignTop: true);
+                  }
+                  // Nếu có dữ liệu trả về
+                  if (snapshot.hasData && snapshot.data!.items != null && snapshot.data!.items!.isNotEmpty) {
                     return OrderInfoRow(
                       label: "Sản phẩm", 
                       value: _generateProductSummary(snapshot.data!.items!), 
                       alignTop: true
                     );
                   }
+                  // Nếu lỗi mạng hoặc API không trả về sản phẩm nào
                   return const OrderInfoRow(
                     label: "Sản phẩm", 
-                    value: "Đang tải...", 
+                    value: "Chưa có dữ liệu sản phẩm", 
                     alignTop: true
                   );
                 },

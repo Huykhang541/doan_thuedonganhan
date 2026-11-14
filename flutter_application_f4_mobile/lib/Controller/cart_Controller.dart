@@ -6,7 +6,7 @@ import '../Config/baseUrl.dart';
 
 class CartController {
 
-  // --- 1. LẤY GIỎ HÀNG (CHỈ TỪ LOCAL) ---
+  // --- 1. LẤY GIỎ HÀNG (ƯU TIÊN DỮ LIỆU ĐÃ LƯU CHUẨN TỪ TRANG CHI TIẾT) ---
   Future<CartResponse?> getCartData() async {
     final prefs = await SharedPreferences.getInstance();
     String? localCartJson = prefs.getString('local_cart');
@@ -22,59 +22,74 @@ class CartController {
       return CartResponse(succeeded: true, data: [], totalMoney: 0);
     }
 
-    // Gọi API lấy danh sách biến thể (sản phẩm) để tra cứu thông tin giá, tên
+    List<dynamic> allVariants = [];
     try {
       final response = await http.get(
           Uri.parse('$baseUrl/products/product-variants/get-all'),
           headers: {"ngrok-skip-browser-warning": "true"}  
       );
-
       if (response.statusCode == 200) {
         final serverData = jsonDecode(response.body);
-        
         if (serverData['succeeded'] == true) {
-          List<dynamic> allVariants = serverData['product_variants'];
-          List<CartItem> finalCartItems = [];
-          double tempTotalMoney = 0.0;
-
-          for (var localItem in localList) {
-            int localId = localItem['product_variant_id'];
-            int localQty = localItem['quantity'] ?? 1;
-
-            var variantInfo = allVariants.firstWhere((v) => v['id'] == localId, orElse: () => null);
-
-            if (variantInfo != null) {
-              double price = double.tryParse(variantInfo['price'].toString()) ?? 0.0;
-              final item = CartItem(
-                productVariantId: localId,
-                productName: variantInfo['name'], 
-                productId: variantInfo['product_id'] ?? 0, // Đã đổi thành productId
-                imageUrl: variantInfo['image'], 
-                price: price,
-                quantity: localQty,
-              );
-
-              finalCartItems.add(item);
-              tempTotalMoney += price * localQty;
-            }
-          }
-
-          return CartResponse(
-            succeeded: true, 
-            data: finalCartItems,        
-            totalMoney: tempTotalMoney
-          );
+          allVariants = serverData['product_variants'] ?? [];
         }
       }
     } catch (e) {
-      print("Lỗi khi lấy thông tin chi tiết cho giỏ hàng Local: $e");
+      print("Lỗi lấy danh sách biến thể dự phòng: $e");
     }
 
-    return CartResponse(succeeded: true, data: [], totalMoney: 0);
+    List<CartItem> finalCartItems = [];
+    double tempTotalMoney = 0.0;
+
+    for (var localItem in localList) {
+      int localId = localItem['product_variant_id'] ?? 0;
+      int localQty = localItem['quantity'] ?? 1;
+      int localRentalDays = localItem['rental_days'] ?? 1;
+      double localDeposit = double.tryParse(localItem['deposit']?.toString() ?? '0') ?? 0.0;
+
+      // Tìm thông tin từ server nếu có
+      var variantInfo = allVariants.firstWhere((v) => v['id'] == localId, orElse: () => null);
+
+      // [FIX ẢNH BIẾN THỂ]: Ưu tiên lấy ảnh, tên, giá đã lưu trực tiếp từ lúc khách chọn màu sắc
+      String itemImg = localItem['image_url'] ?? (variantInfo != null ? variantInfo['image'] : '') ?? '';
+      String itemName = localItem['product_name'] ?? (variantInfo != null ? variantInfo['name'] : 'Sản phẩm');
+      int itemProdId = localItem['product_id'] ?? (variantInfo != null ? (variantInfo['product_id'] ?? 0) : 0);
+      double itemPrice = double.tryParse(localItem['price']?.toString() ?? '') ?? 
+                         (variantInfo != null ? (double.tryParse(variantInfo['price'].toString()) ?? 0.0) : 0.0);
+
+      final item = CartItem(
+        productVariantId: localId,
+        productName: itemName, 
+        productId: itemProdId, 
+        imageUrl: itemImg, 
+        price: itemPrice,
+        quantity: localQty,
+        rentalDays: localRentalDays,
+        deposit: localDeposit,
+      );
+
+      finalCartItems.add(item);
+      tempTotalMoney += ((itemPrice * localRentalDays) + localDeposit) * localQty;
+    }
+
+    return CartResponse(
+      succeeded: true, 
+      data: finalCartItems,        
+      totalMoney: tempTotalMoney
+    );
   }
 
-  // --- 2. THÊM VÀO GIỎ HÀNG (CHỈ LƯU LOCAL) ---
-  static Future<void> addToCart(int productVariantId, int quantity) async {
+  // --- 2. THÊM VÀO GIỎ HÀNG (LƯU KÈM ẢNH, TÊN, GIÁ CỦA BIẾN THỂ ĐÃ CHỌN) ---
+  static Future<void> addToCart(
+    int productVariantId, 
+    int quantity, 
+    int rentalDays, 
+    double deposit, {
+    int? productId,
+    String? productName,
+    double? price,
+    String? imageUrl,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     List<dynamic> currentList = [];
     String? localCartJson = prefs.getString('local_cart');
@@ -93,6 +108,13 @@ class CartController {
       if (item['product_variant_id'] == productVariantId) {
         int currentQty = item['quantity'] ?? 0;
         item['quantity'] = currentQty + quantity; 
+        item['rental_days'] = rentalDays; 
+        item['deposit'] = deposit;
+        if (imageUrl != null && imageUrl.isNotEmpty) item['image_url'] = imageUrl;
+        if (productName != null && productName.isNotEmpty) item['product_name'] = productName;
+        if (price != null) item['price'] = price;
+        if (productId != null) item['product_id'] = productId;
+        
         currentList[i] = item;
         exists = true;
         break; 
@@ -102,7 +124,13 @@ class CartController {
     if (!exists) {
       currentList.add({
         'product_variant_id': productVariantId,
+        'product_id': productId ?? 0,
+        'product_name': productName ?? 'Sản phẩm',
+        'price': price ?? 0.0,
+        'image_url': imageUrl ?? '',
         'quantity': quantity, 
+        'rental_days': rentalDays,
+        'deposit': deposit,
         'added_at': DateTime.now().toIso8601String(), 
       });
     }
@@ -110,7 +138,7 @@ class CartController {
     await prefs.setString('local_cart', jsonEncode(currentList));
   }
 
-  // --- 3. CẬP NHẬT SỐ LƯỢNG (CHỈ LOCAL) ---
+  // --- 3. CẬP NHẬT SỐ LƯỢNG ---
   Future<bool> updateCartQuantity(int productVariantId, int newQuantity) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -131,7 +159,7 @@ class CartController {
     }
   }
 
-  // --- 4. XÓA SẢN PHẨM KHỎI GIỎ (CHỈ LOCAL) ---
+  // --- 4. XÓA SẢN PHẨM KHỎI GIỎ ---
   Future<bool> deleteCartItem(int productVariantId) async {
     try {
       final prefs = await SharedPreferences.getInstance();

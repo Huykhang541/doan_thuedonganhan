@@ -48,7 +48,7 @@ class CouponController {
         final Map<String, dynamic> data = jsonDecode(respone.body);
 
         if(data['succeeded']){
-          print("getCoupon: ${data['message']}, ${data['succeeded']}, ${data['scoupon']}");
+          print("getCoupon: ${data['message']}, ${data['succeeded']}, ${data['coupon']}");
           return CouponModel.fromJson(data['coupon']);
         }
         else{

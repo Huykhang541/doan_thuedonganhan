@@ -5,9 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../resources/app_colors.dart';
 import '../Model/cartModel.dart'; 
 import '../Controller/cart_Controller.dart';
-
 import '../View/Widget/custom_button.dart';
-import 'checkout_screen.dart'; // [QUAN TRỌNG] Import trang thanh toán
+import 'checkout_screen.dart';
 
 class ShoppingCardScreen extends StatefulWidget {
   const ShoppingCardScreen({super.key});
@@ -17,16 +16,14 @@ class ShoppingCardScreen extends StatefulWidget {
 }
 
 class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
-  // Chỉ dùng duy nhất 1 Controller cho giỏ hàng
   final CartController _cartController = CartController();
-
   CartResponse? _cartData;
   bool _isLoadingInitial = true;
   String? _userToken;
   
   String formatCurrency(double? amount) {
     final format = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
-    return format.format(amount);
+    return format.format(amount ?? 0);
   }
 
   @override
@@ -53,96 +50,49 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
   Future<void> _loadToken() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('user_token') ?? '';
-
-    if (mounted) {
-      setState(() {
-        _userToken = token;
-      });
-    }
+    if (mounted) setState(() => _userToken = token);
   }
 
   Future<void> _refreshCartSilent() async {
     final data = await _cartController.getCartData();
-    if (mounted && data != null) {
-      setState(() => _cartData = data);
-    }
+    if (mounted && data != null) setState(() => _cartData = data);
   }
 
-  // --- HÀM XỬ LÝ XÓA SẢN PHẨM ---
   Future<void> _handleDeleteItem(int index, int variantId) async {
-    // 1. Hỏi người dùng
     bool? confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Xác nhận xóa"),
-        content: const Text("Bạn có chắc muốn xóa sản phẩm này khỏi giỏ hàng?"),
+        content: const Text("Bạn có chắc muốn xóa món đồ này khỏi danh sách thuê?"),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Hủy"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Xóa", style: TextStyle(color: Colors.red)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Hủy")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Xóa", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
 
     if (confirm != true) return;
-
-    // 2. Gọi logic Xóa từ _cartController
     bool success = await _cartController.deleteCartItem(variantId);
 
     if (success) {
-      // 3. Update UI
-      setState(() {
-        _cartData!.data.removeAt(index);
-      });
+      setState(() => _cartData!.data.removeAt(index));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đã xóa sản phẩm"), duration: Duration(seconds: 1)),
-      );
-
-      // Tính lại tổng tiền
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã xóa món đồ"), duration: Duration(seconds: 1)));
       _refreshCartSilent();
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lỗi xóa sản phẩm!"), backgroundColor: Colors.red),
-      );
     }
   }
 
-  // --- HÀM TĂNG GIẢM SỐ LƯỢNG ---
   Future<void> _handleUpdateQuantity(int index, int variantId, int currentQty, bool isIncrease) async {
     int newQty = isIncrease ? currentQty + 1 : currentQty - 1;
-
-    // Nếu giảm về 0 thì gọi hàm xóa
     if (newQty < 1) {
       _handleDeleteItem(index, variantId);
       return;
     }
 
-    setState(() {
-      _cartData!.data[index] = _cartData!.data[index].copyWith(quantity: newQty);
-    });
-
-    // Gọi logic update từ _cartController
+    setState(() => _cartData!.data[index] = _cartData!.data[index].copyWith(quantity: newQty));
     bool success = await _cartController.updateCartQuantity(variantId, newQty);
-    
     if (success) {
       await _refreshCartSilent();
-    } else {
-      if (mounted) {
-        setState(() {
-           int oldQty = isIncrease ? newQty - 1 : newQty + 1;
-           _cartData!.data[index] = _cartData!.data[index].copyWith(quantity: oldQty);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Lỗi cập nhật số lượng!"))
-        );
-      }
     }
   }
 
@@ -174,7 +124,6 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
 
   Widget _buildBodyContent() {
     if (_isLoadingInitial) return const Center(child: CircularProgressIndicator());
-    
     if (_cartData == null || _cartData!.data.isEmpty) {
       return RefreshIndicator(
         onRefresh: _firstLoad,
@@ -182,7 +131,7 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
           children: [
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.5,
-              child: const Center(child: Text("Giỏ hàng của bạn đang trống")),
+              child: const Center(child: Text("Danh sách đồ muốn thuê đang trống")),
             )
           ],
         ),
@@ -202,18 +151,13 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        
         _buildFooterTotal(_cartData!.totalMoney), 
-        
         const SizedBox(height: 16),
-        
         CustomButton(
-          text: "Tiếp tục thanh toán", 
+          text: "Tiếp tục đặt thuê", 
           onPressed: () {
              if (_cartData == null || _cartData!.data.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Giỏ hàng trống!"))
-                );
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Danh sách trống!")));
                 return;
              }
              if (_userToken != '' && _userToken != null) {
@@ -229,10 +173,7 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
                );
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Vui lòng đăng nhập trước khi đặt hàng'),
-                  backgroundColor: Colors.redAccent,
-                )
+                const SnackBar(content: Text('Vui lòng đăng nhập trước khi đặt thuê đồ'), backgroundColor: Colors.redAccent)
               );
             }
           }
@@ -258,14 +199,13 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
-                  headers: {"ngrok-skip-browser-warning": "true"},
+                  headers: const {"ngrok-skip-browser-warning": "true"},
                   item.imageUrl ?? '',
                   width: 80, height: 80, fit: BoxFit.cover,
                   errorBuilder: (c, e, s) => Container(width: 80, height: 80, color: Colors.grey[200]),
                 ),
               ),
               const SizedBox(width: 16),
-              
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,7 +216,7 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            item.productName ?? 'Sản phẩm', 
+                            item.productName ?? 'Món đồ', 
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             maxLines: 2, overflow: TextOverflow.ellipsis,
                           ),
@@ -290,48 +230,40 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
                         )
                       ],
                     ),
-                    
-                    
-                    
+                    const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                        formatCurrency(item.price), 
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 16)
+                        // Cập nhật phần hiển thị Tiền thuê và Tiền cọc tại đây
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Thuê: ${formatCurrency(item.price)}", 
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 15)
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              // Đổi 'item.deposit' thành biến chứa giá trị tiền cọc trong CartItem của bạn (vd: item.depositPrice)
+                              "Cọc: ${formatCurrency(item.deposit ?? 0)}", 
+                              style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blueGrey, fontSize: 13)
+                            ),
+                          ],
                         ),
-                        
                         Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(20)
-                          ),
+                          decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20)),
                           child: Row(
                             children: [
                               InkWell(
                                 onTap: () => _handleUpdateQuantity(index, item.productVariantId ?? 0, item.quantity ?? 1, false),
                                 borderRadius: BorderRadius.circular(20),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: Icon(Icons.remove, size: 18, color: Colors.black54),
-                                ),
+                                child: const Padding(padding: EdgeInsets.all(8.0), child: Icon(Icons.remove, size: 18, color: Colors.black54)),
                               ),
-                              
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                child: Text(
-                                  "${item.quantity ?? 1}", 
-                                  style: const TextStyle(fontWeight: FontWeight.bold)
-                                ),
-                              ),
-                              
+                              Padding(padding: const EdgeInsets.symmetric(horizontal: 4.0), child: Text("${item.quantity ?? 1}", style: const TextStyle(fontWeight: FontWeight.bold))),
                               InkWell(
                                 onTap: () => _handleUpdateQuantity(index, item.productVariantId ?? 0, item.quantity ?? 1, true),
                                 borderRadius: BorderRadius.circular(20),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: Icon(Icons.add, size: 18, color: AppColors.primaryOrange),
-                                ),
+                                child: const Padding(padding: EdgeInsets.all(8.0), child: Icon(Icons.add, size: 18, color: AppColors.primaryOrange)),
                               ),
                             ],
                           ),
@@ -352,11 +284,8 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text("Tổng thanh toán:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        Text(
-          formatCurrency(totalMoney), 
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)
-        ),
+        const Text("Tạm tính tổng tiền:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(formatCurrency(totalMoney), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
       ],
     );
   }
@@ -368,7 +297,7 @@ class _ShoppingCardScreenState extends State<ShoppingCardScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
-          const Text("Giỏ hàng", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text("Giỏ đồ muốn thuê", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(width: 48),
         ],
       ),

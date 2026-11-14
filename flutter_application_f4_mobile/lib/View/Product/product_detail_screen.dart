@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../Controller/product_controller.dart';
 import '../../Controller/favorite_controller.dart';
-import '../../Controller/cart_Controller.dart';
+import '../../Controller/cart_Controller.dart'; 
 import '../../Model/product_model.dart';
 import '../../Model/review_model.dart';
 import '../../Config/baseUrl.dart';
@@ -86,12 +86,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         setState(() { _reviewsFuture = ProductController.getReviews(widget.productId); });
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Gửi đánh giá thành công!"), backgroundColor: Colors.green));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Gửi thất bại! Vui lòng thử lại."), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Gửi thất bại! Bạn chỉ được đánh giá khi đơn thuê đã hoàn thành."), backgroundColor: Colors.red));
       }
     }
   }
 
-  // Đồng bộ format giá giống Home
   String formatCurrency(double? price) {
     if (price == null) return "0 VNĐ";
     final format = NumberFormat.currency(locale: 'vi_VN', symbol: 'VNĐ', decimalDigits: 0);
@@ -164,7 +163,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-   DateTime start = DateTime(_startDate.year, _startDate.month, _startDate.day);
+    DateTime start = DateTime(_startDate.year, _startDate.month, _startDate.day);
     DateTime end = DateTime(_endDate.year, _endDate.month, _endDate.day);
     int rentalDays = end.difference(start).inDays;
     
@@ -172,7 +171,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context, isFav); // Giữ nguyên logic trả tim về
+        Navigator.pop(context, isFav);
         return false;
       },
       child: GestureDetector(
@@ -183,7 +182,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             future: _productFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.orange));
-              else if (!snapshot.hasData || snapshot.data == null) return const Center(child: Text("Không tìm thấy thông tin sản phẩm"));
+              else if (!snapshot.hasData || snapshot.data == null) return const Center(child: Text("Không tìm thấy thôngர்த்து sản phẩm"));
 
               final Product product = snapshot.data!;
               final List<ProductVariant> variants = product.variants ?? [];
@@ -198,23 +197,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                  );
               }
 
-              if (_selectedVariant == null) {
+              ProductVariant? displayVariant = _selectedVariant;
+              if (displayVariant == null) {
                  if (widget.productVariantId != null) {
-                    try { _selectedVariant = variants.firstWhere((v) => v.id == widget.productVariantId); } 
-                    catch (e) { _selectedVariant = variants[0]; }
-                 } else { _selectedVariant = variants[0]; }
+                    try { displayVariant = variants.firstWhere((v) => v.id == widget.productVariantId); } 
+                    catch (e) { displayVariant = variants[0]; }
+                 } else { displayVariant = variants[0]; }
               }
 
-              final displayVariant = _selectedVariant ?? variants[0];
               String displayImage = getFullImageUrl(displayVariant.imageUrl);
-              
               double displayPrice = (displayVariant.price != null && displayVariant.price! > 0) ? displayVariant.price! : product.price;
-              double displayDeposit = (displayVariant.deposit != null && displayVariant.deposit! > 0) ? displayVariant.deposit! : (product.deposit ?? 0);
+              double displayDeposit = (displayVariant.deposit != null && displayVariant.deposit! > 0) ? displayVariant.deposit! : (product.deposit ?? 0.0);
               
-              String statusText;
-              Color statusBgColor;
-              Color statusTextColor;
-              bool canRent = false;
+              String statusText; Color statusBgColor; Color statusTextColor; bool canRent = false;
 
               switch (product.status) {
                 case 'SanSang':
@@ -269,7 +264,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
                             const SizedBox(height: 20),
                             
-                            // Tiêu đề + Trạng thái
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -285,12 +279,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ),
                             const SizedBox(height: 8),
                             
-                            // Rating đồng bộ giống Home
                             FutureBuilder<ReviewData?>(
                               future: _reviewsFuture,
                               builder: (context, reviewSnap) {
                                 double rating = product.averageRating;
                                 int count = product.reviewCount;
+                                
                                 if (reviewSnap.hasData && reviewSnap.data != null) {
                                   final rData = reviewSnap.data!;
                                   if (rating == 0 && rData.rows.isNotEmpty) {
@@ -311,7 +305,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Giá và Tiền cọc
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -340,7 +333,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 spacing: 10, runSpacing: 10,
                                 children: List.generate(variants.length, (index) {
                                   final variant = variants[index];
-                                  final isSelected = _selectedVariant?.id == variant.id;
+                                  final isSelected = displayVariant?.id == variant.id;
                                   return GestureDetector(
                                     onTap: () => setState(() { _selectedVariant = variant; qty = 1; }),
                                     child: Container(
@@ -364,7 +357,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ],
                             const SizedBox(height: 24),
                             
-                            // Chọn ngày
                             Row(
                               children: [
                                 Expanded(
@@ -373,7 +365,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text("Ngày bắt đầu thuê:", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                        const Text("Ngày bắt đầu:", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
                                         const SizedBox(height: 6),
                                         Container(
                                           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -397,7 +389,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text("Ngày kết thúc thuê:", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                        const Text("Ngày kết thúc:", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
                                         const SizedBox(height: 6),
                                         Container(
                                           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -426,7 +418,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             const Divider(thickness: 4, color: Color(0xFFEEEEEE)),
                             const SizedBox(height: 20),
                             
-                            // Đánh giá
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -455,7 +446,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     const SizedBox(width: 10),
                                     Padding(
                                       padding: const EdgeInsets.only(bottom: 8.0),
-                                      // CHỈNH SỬA TẠI ĐÂY: Hiển thị nửa sao nếu có phần thập phân
                                       child: Row(
                                         children: List.generate(5, (index) {
                                           if (index < rating.floor()) {
@@ -505,6 +495,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
+                            
                             FutureBuilder<ReviewData?>(
                               future: _reviewsFuture, 
                               builder: (context, snapshot) {
@@ -518,7 +509,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     return Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        CircleAvatar(radius: 18, backgroundColor: Colors.grey.shade200, backgroundImage: const NetworkImage("https://via.placeholder.com/150")),
+                                        CircleAvatar(radius: 18, backgroundColor: Colors.grey.shade200, child: const Icon(Icons.person, color: Colors.grey)),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
@@ -532,7 +523,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 ],
                                               ),
                                               const SizedBox(height: 2),
-                                              // Bạn cũng có thể áp dụng sao rưỡi cho từng comment ở đây nếu thích, nhưng thường số sao đánh giá là số nguyên
                                               Row(children: List.generate(5, (s) => Icon(Icons.star, size: 12, color: s < review.rating ? Colors.amber : Colors.grey.shade300))),
                                               const SizedBox(height: 4),
                                               Text(review.comment, style: const TextStyle(fontSize: 13, color: Colors.black87)),
@@ -551,7 +541,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                   
-                  // Footer
                   Positioned(
                     left: 0, right: 0, bottom: 0,
                     child: Container(
@@ -595,10 +584,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 const SizedBox(width: 8),
                                 ElevatedButton(
                                   onPressed: canRent ? () async {
-                                    if (_selectedVariant != null) {
-                                      await CartController.addToCart(_selectedVariant!.id, qty);
-                                      if (!context.mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Đã thêm $qty ${product.name} vào giỏ"), backgroundColor: Colors.green));
+                                    if (displayVariant != null) {
+                                      // Ghép tên sản phẩm kèm màu sắc để dễ phân biệt trong giỏ hàng
+                                      String variantColor = (displayVariant.color != null && displayVariant.color!.isNotEmpty) 
+                                          ? " (${displayVariant.color})" 
+                                          : "";
+                                      String fullVariantName = "${displayVariant.name ?? product.name}$variantColor";
+
+                                      await CartController.addToCart(
+                                        displayVariant.id ?? 0, 
+                                        qty, 
+                                        rentalDays, 
+                                        displayDeposit,
+                                        productId: product.id,
+                                        productName: fullVariantName,
+                                        price: displayPrice,
+                                        imageUrl: displayImage, // Truyền thẳng URL ảnh biến thể đang hiển thị
+                                      );
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text("Đã thêm $qty $fullVariantName vào giỏ"), backgroundColor: Colors.green)
+                                      );
                                     }
                                   } : null,
                                   style: ElevatedButton.styleFrom(

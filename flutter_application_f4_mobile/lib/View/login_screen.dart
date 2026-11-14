@@ -31,11 +31,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // --- 2. XỬ LÝ LOGIC ---
+  // --- 2. XỬ LÝ LOGIC ---
   void _handleLogin() async {
     String email = _emailController.text.trim();
     String pass = _passController.text.trim();
 
-    // B1: Kiểm tra rỗng
     if (email.isEmpty || pass.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Vui lòng nhập Email và Mật khẩu"), backgroundColor: Colors.red),
@@ -43,18 +43,17 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // B2: Gọi API Đăng nhập
-    setState(() => _isLoading = true); // Hiện loading
+    setState(() => _isLoading = true); 
 
-    bool isSuccess = await _authController.login(context, email, pass);
+    // Đổi biến nhận về thành String? (chứa role) thay vì bool
+    String? role = await _authController.login(context, email, pass);
 
     if (mounted) {
-      setState(() => _isLoading = false); // Tắt loading
+      setState(() => _isLoading = false); 
 
-      // B3: Phân quyền
-      if (isSuccess) {
-        if (email == "admin@gmail.com") {
-           // Nếu là Admin -> Vào trang quản lý đơn hàng
+      // B3: Phân quyền động dựa trên dữ liệu từ Database
+      if (role != null) {
+        if (role.toLowerCase() == "admin") {
            print("👑 Chào mừng Admin!");
            Navigator.pushAndRemoveUntil(
              context, 
@@ -62,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
              (route) => false
            );
         } else {
-           // Nếu là User -> Vào trang chủ
+           // Cho cả khách hàng và chủ cho thuê vào trang chủ (hoặc chia tab sau này)
            Navigator.pushAndRemoveUntil(
              context, 
              MaterialPageRoute(builder: (_) => const HomeScreen()),

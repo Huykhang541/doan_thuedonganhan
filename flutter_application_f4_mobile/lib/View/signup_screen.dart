@@ -12,7 +12,6 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  // --- 1. KHAI BÁO BIẾN ---
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -21,9 +20,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _confirmPassController = TextEditingController();
   
   final AuthController _authController = AuthController(); 
-  bool _isLoading = false; // Biến để hiện vòng xoay loading
+  bool _isLoading = false; 
+  
+  // BIẾN LƯU VAI TRÒ CHỌN
+  String _selectedRole = 'khach_hang'; 
 
-  // Giải phóng bộ nhớ khi tắt màn hình
   @override
   void dispose() {
     _nameController.dispose();
@@ -35,22 +36,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  // --- 2. XỬ LÝ LOGIC ---
   void _handleRegister() async{
-    // B1: Kiểm tra rỗng
     if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passController.text.isEmpty) {
        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vui lòng nhập đủ thông tin"), backgroundColor: Colors.red));
        return;
     }
 
-    // B2: Kiểm tra mật khẩu xác nhận
     if (_passController.text != _confirmPassController.text) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Mật khẩu xác nhận không khớp"), backgroundColor: Colors.red));
       return;
     }
 
-    // B3: Gọi API đăng ký
-    setState(() => _isLoading = true); // Hiện loading
+    setState(() => _isLoading = true); 
 
     await _authController.register(
       context, 
@@ -59,12 +56,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
       fullname: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
       address: _addressController.text.trim(),
+      role: _selectedRole, // Truyền vai trò xuống Controller
     );
 
-    if (mounted) setState(() => _isLoading = false); // Tắt loading
+    if (mounted) setState(() => _isLoading = false); 
   }
 
-  // --- 3. GIAO DIỆN ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,11 +80,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Logo
               Image.asset('assets/Logo.png', height: 200, width: 200),
               const SizedBox(height: 20),
 
-              // Khung Form màu trắng
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
@@ -95,7 +90,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
-                    BoxShadow(color: Colors.black, blurRadius: 10, offset: const Offset(0, 5))
+                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))
                   ],
                 ),
                 child: Column(
@@ -105,7 +100,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     const Text("Đăng Ký", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     
-                    // Link quay lại Đăng nhập
                     Row(
                       children: [
                         const Text("Đã có tài khoản? ", style: TextStyle(color: Colors.grey)),
@@ -117,50 +111,42 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                     const SizedBox(height: 30),
 
-                    // Các ô nhập liệu
-                    CustomTextField(
-                      label: "Họ tên", 
-                      hint: "Nguyễn Văn A", 
-                      controller: _nameController
+                    CustomTextField(label: "Họ tên", hint: "Nguyễn Văn A", controller: _nameController),
+                    CustomTextField(label: "Email", hint: "abc@gmail.com", controller: _emailController, keyboardType: TextInputType.emailAddress),
+                    CustomTextField(label: "SĐT", hint: "0909...", controller: _phoneController, keyboardType: TextInputType.phone),
+                    CustomTextField(label: "Địa chỉ", hint: "TP.HCM", controller: _addressController),
+                    
+                    // --- THÊM DROPDOWN CHỌN VAI TRÒ ---
+                    const SizedBox(height: 15),
+                    const Text("Bạn là:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 5),
+                    // Sửa đổi từ 'chu_tro' -> 'chu_so_huu'
+                    DropdownButtonFormField<String>(
+                      value: _selectedRole,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'khach_hang', child: Text("Khách cần thuê")),
+                        DropdownMenuItem(value: 'chu_do', child: Text("Chủ cho thuê")), // Cập nhật đúng Enum DB
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedRole = value!;
+                        });
+                      },
                     ),
 
-                    CustomTextField(
-                      label: "Email", 
-                      hint: "abc@gmail.com", 
-                      controller: _emailController, 
-                      keyboardType: TextInputType.emailAddress
-                    ),
 
-                    CustomTextField(
-                      label: "SĐT", 
-                      hint: "0909...", 
-                      controller: _phoneController, 
-                      keyboardType: TextInputType.phone
-                    ),
+                    const SizedBox(height: 15),
+                    // ----------------------------------
 
-                    CustomTextField(
-                      label: "Địa chỉ", 
-                      hint: "TP.HCM", 
-                      controller: _addressController
-                    ),
-
-                    CustomTextField(
-                      label: "Mật khẩu", 
-                      hint: "*******", 
-                      controller: _passController, 
-                      isPassword: true
-                    ),
-
-                    CustomTextField(
-                      label: "Nhập lại mật khẩu", 
-                      hint: "*******", 
-                      controller: _confirmPassController, 
-                      isPassword: true
-                    ),
+                    CustomTextField(label: "Mật khẩu", hint: "*******", controller: _passController, isPassword: true),
+                    CustomTextField(label: "Nhập lại mật khẩu", hint: "*******", controller: _confirmPassController, isPassword: true),
 
                     const SizedBox(height: 20),
                     
-                    // Nút bấm Đăng ký
                     CustomButton(
                       text: _isLoading ? "Đang xử lý..." : "Đăng ký", 
                       onPressed: _isLoading ? () {} : _handleRegister,

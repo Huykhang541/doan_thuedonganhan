@@ -1,4 +1,4 @@
-class ShippingModel{
+class ShippingModel {
   final bool succeeded;
   final String? shippingFee;
   final String? message;
@@ -9,11 +9,12 @@ class ShippingModel{
     this.message
   });
 
-  factory ShippingModel.fromJson(Map<String,dynamic> json){
+  factory ShippingModel.fromJson(Map<String, dynamic> json) {
     return ShippingModel(
-      succeeded: json['succeeded'],
-      shippingFee: json['shipping_fee'],
-      message: json['message']
+      succeeded: json['succeeded'] ?? false,
+      // [FIX]: Thêm .toString() để tránh lỗi ép kiểu từ số (int) sang chuỗi (String)
+      shippingFee: json['shipping_fee']?.toString(), 
+      message: json['message']?.toString(),
     );
   }
 }

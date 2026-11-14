@@ -136,6 +136,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             if (result == true) setState(() => _userFuture = _authController.getProfile());
                           },
                         ),
+
+                        // =========================================================
+                        // --- BẮT ĐẦU ĐOẠN CODE THÊM MỚI: NÚT NÂNG CẤP TÀI KHOẢN ---
+                        // =========================================================
+                        if (user.role != 'ca_hai' && user.role != 'admin' && user.role != 'Admin')
+                          ProfileMenuItem(
+                            icon: Icons.star_border, 
+                            textColor: Colors.orange, // Làm nổi bật nút nâng cấp
+                            text: user.role == 'khach_hang' 
+                                ? "Đăng ký trở thành Chủ cho thuê" 
+                                : "Đăng ký trở thành Khách thuê",
+                            onTap: () async {
+                              // 1. Hiện hộp thoại xác nhận
+                              bool confirm = await showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text("Xác nhận", style: TextStyle(fontWeight: FontWeight.bold)),
+                                  content: const Text("Bạn có muốn mở khóa tính năng để vừa có thể thuê đồ, vừa có thể cho thuê đồ của mình không?"),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false), 
+                                      child: const Text("Hủy", style: TextStyle(color: Colors.grey))
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true), 
+                                      child: const Text("Đồng ý", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold))
+                                    ),
+                                  ],
+                                )
+                              ) ?? false;
+
+                              // 2. Nếu Đồng ý -> Gọi API nâng cấp
+                              if (confirm) {
+                                bool success = await _authController.upgradeRole(context);
+                                if (success) {
+                                  // Nâng cấp thành công -> Tải lại Profile để ẩn nút này đi
+                                  setState(() => _userFuture = _authController.getProfile());
+                                }
+                              }
+                            },
+                          ),
+                        // =========================================================
+                        // --- KẾT THÚC ĐOẠN CODE THÊM MỚI ---
+                        // =========================================================
                         
                         // Menu: Đổi mật khẩu
                         ProfileMenuItem(
@@ -145,7 +189,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
 
                         // Menu: Danh sách yêu thích
-                       // Tìm đến ProfileMenuItem của Danh sách yêu thích và sửa thành:
                         ProfileMenuItem(
                           icon: Icons.favorite_outline, 
                           text: "Danh sách yêu thích", 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_f4_mobile/View/Home/home_screen.dart';
-//import 'package:flutter_application_f4_mobile/View/shoppingcard_screen.dart';
+//koimport 'package:flutter_application_f4_mobile/View/shoppingcard_screen.dart';
 void main() {
   runApp(const MyApp());
 }

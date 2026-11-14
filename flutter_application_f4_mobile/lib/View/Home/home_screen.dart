@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -80,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onSearchChanged(String query) { setState(() { _searchText = query.toLowerCase(); }); }
 
-  // [SỬA LỖI TIM]: Trả về Future<bool?> để Card biết trạng thái tim đã thay đổi
   Future<bool?> _navigateToDetail(int productId) async {
     if (productId > 0) {
       return await Navigator.push<bool>(
@@ -272,7 +270,7 @@ class _HoverProductCard extends StatefulWidget {
   final ProductVariant defaultVariant; 
   final bool isHot; 
   final Map<String, String> imageHeaders; 
-  final Future<bool?> Function() onTap; // [SỬA LỖI TIM]: Thay bằng Future function
+  final Future<bool?> Function() onTap; 
   final Function(double) formatCurrency; 
   
   const _HoverProductCard({ 
@@ -327,6 +325,7 @@ class _HoverProductCardState extends State<_HoverProductCard> {
   Widget build(BuildContext context) {
     String imgUrl = widget.product.imageUrl;
     double price = widget.product.price;
+    double deposit = widget.product.deposit ?? 0.0;
     
     String statusText;
     Color statusBgColor;
@@ -355,7 +354,6 @@ class _HoverProductCardState extends State<_HoverProductCard> {
       onExit: (_) => setState(() => _isHovering = false), 
       cursor: SystemMouseCursors.click, 
       child: GestureDetector(
-        // [SỬA LỖI TIM]: Đợi người dùng tắt màn hình chi tiết, lấy kết quả để thay đổi trạng thái tim ở ngoài
         onTap: () async {
           final result = await widget.onTap();
           if (result != null) {
@@ -441,7 +439,8 @@ class _HoverProductCardState extends State<_HoverProductCard> {
                             InkWell(
                               onTap: canRent ? () async {
                                   if (widget.defaultVariant.id > 0) {
-                                    await CartController.addToCart(widget.defaultVariant.id, 1);
+                                    // BỔ SUNG: Truyền thêm 1 ngày và tiền cọc
+                                    await CartController.addToCart(widget.defaultVariant.id, 1, 1, deposit);
                                     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Đã thêm ${widget.product.name} vào giỏ"), duration: const Duration(seconds: 1)));
                                   }
                               } : null,

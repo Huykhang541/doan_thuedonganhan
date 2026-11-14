@@ -1,3 +1,5 @@
+// file: lib/Model/review_model.dart
+
 // 1. Class Item chi tiết (Tương ứng với từng object trong 'rows')
 class ReviewItem {
   final double rating;
@@ -14,19 +16,17 @@ class ReviewItem {
 
   factory ReviewItem.fromJson(Map<String, dynamic> json) {
     return ReviewItem(
-      // Chuyển đổi an toàn sang double (vì server có thể trả về 5 hoặc 5.0)
-      rating: double.tryParse(json['rating'].toString()) ?? 0.0,
+      rating: double.tryParse(json['rating']?.toString() ?? '0') ?? 0.0,
       comment: json['comment'] ?? "",
       fullname: json['fullname'] ?? "Ẩn danh",
-      // Parse ngày tháng chuẩn ISO
       createdAt: json['created_at'] != null 
-          ? DateTime.tryParse(json['created_at']) 
+          ? DateTime.tryParse(json['created_at'].toString()) 
           : null,
     );
   }
 }
 
-// 2. Class chứa thông tin thống kê (Tương ứng với key 'reviews')
+// 2. Class chứa thông tin thống kê
 class ReviewData {
   final int totalRating;
   final double avgRating;
@@ -39,12 +39,16 @@ class ReviewData {
   });
 
   factory ReviewData.fromJson(Map<String, dynamic> json) {
+    var rawRows = json['rows'];
+    List<ReviewItem> parsedRows = [];
+    if (rawRows is List) {
+      parsedRows = rawRows.map((item) => ReviewItem.fromJson(item as Map<String, dynamic>)).toList();
+    }
+
     return ReviewData(
-      totalRating: int.tryParse(json['totalRating'].toString()) ?? 0,
-      avgRating: double.tryParse(json['avgRating'].toString()) ?? 0.0,
-      rows: (json['rows'] as List? ?? [])
-          .map((item) => ReviewItem.fromJson(item))
-          .toList(),
+      totalRating: int.tryParse((json['totalRating'] ?? parsedRows.length).toString()) ?? 0,
+      avgRating: double.tryParse((json['avgRating'] ?? 0.0).toString()) ?? 0.0,
+      rows: parsedRows,
     );
   }
 }
@@ -62,11 +66,17 @@ class ReviewResponse {
   });
 
   factory ReviewResponse.fromJson(Map<String, dynamic> json) {
+    ReviewData? extractedData;
+    
+    // Ánh xạ với response mẫu của backend: {succeeded: true, message: "...", reviews: {...}}
+    if (json['reviews'] != null && json['reviews'] is Map<String, dynamic>) {
+        extractedData = ReviewData.fromJson(json['reviews'] as Map<String, dynamic>);
+    }
+
     return ReviewResponse(
-      succeeded: json['succeeded'] ?? false,
+      succeeded: json['succeeded'] == true,
       message: json['message'] ?? "",
-      // Key trong JSON là "reviews", nhưng ta map vào biến 'data' cho dễ hiểu
-      data: json['reviews'] != null ? ReviewData.fromJson(json['reviews']) : null,
+      data: extractedData,
     );
   }
 }
