@@ -1,8 +1,8 @@
 import jwt from 'jsonwebtoken';
+import userModel from "../models/userModel.js"; // [FIX]: Import model để check revoke
 
-export default function admin(req, res, next) {
+export default async function admin(req, res, next) { // [FIX]: Chuyển thành async function
     try {
-        // 1. Lấy mã Token từ trên Header mà bạn gửi (chỗ Bearer Token trong Thunder Client)
         const authHeader = req.header('Authorization') || req.header('authorization');
         const token = authHeader && authHeader.split(' ')[1];
 
@@ -10,15 +10,18 @@ export default function admin(req, res, next) {
             return res.status(403).json({ message: "Admin privileges required: Không tìm thấy Token" });
         }
 
-        // 2. Giải mã Token ra xem ruột có gì
+        // [FIX]: Thêm check token thu hồi (blacklist) bảo vệ tuyến admin
+        if(await userModel.isTokenRevoked(token)){
+            return res.status(401).json({message: 'Invalid or expired token'});
+        }
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // 3. Kiểm tra xem quyền có phải là admin không (Khớp hoàn toàn với Token ta tạo lúc nãy)
         if (decoded.role === 'admin' || decoded.VaiTro === 'admin') {
-            req.userid = decoded.id; // Nhớ lại mã ID người dùng cho các hàm phía sau dùng
-            return next();           // Mở cửa! Chạy tiếp vào hàm của Controller
+            req.userid = decoded.id; 
+            req.role = decoded.role || decoded.VaiTro; // [FIX]: Gán req.role để Controller sau đó biết đây là Admin
+            return next();           
         } else {
-            // Nếu Token giải mã ra chữ 'user', chặn lại
             return res.status(403).json({ message: "Admin privileges required: Bạn chỉ là User thường" });
         }
     } catch (error) {

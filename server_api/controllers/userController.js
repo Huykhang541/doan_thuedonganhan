@@ -42,14 +42,20 @@ export default class userController {
     
     static async login(req, res) {
         try {
-            const {email , password} = req.body;
-            if(!email || !password) return res.status(400).json({succeeded: false, message: "Thiếu Email hoặc Mật khẩu"});
-
-            const user = await userModel.findByUsername(email);
-            if(!user) return res.status(401).json({succeeded: false, message: 'Không tìm thấy Email'});
+            const { email, password } = req.body;
+            if (!email || !password) return res.status(400).json({ succeeded: false, message: "Thiếu Email hoặc Mật khẩu" });
+    
+            // THÊM DÒNG NÀY: Chuẩn hóa email về chữ thường và xóa khoảng trắng thừa
+            const normalizedEmail = email.toLowerCase().trim(); 
+    
+            // Đổi biến email thành normalizedEmail ở hàm tìm kiếm
+            const user = await userModel.findByUsername(normalizedEmail);
+            if (!user) return res.status(401).json({ succeeded: false, message: 'Không tìm thấy Email' });
 
             // ==========================================================
-            if (user.TrangThaiTaiKhoan === 'locked') {
+            // Thay vì kiểm tra 'locked', hãy kiểm tra đúng Enum trong Database là 'Khoa'
+            // Thay vì kiểm tra 'locked', hãy kiểm tra đúng Enum trong Database là 'Khoa'
+            if (user.TrangThaiTaiKhoan === 'Khoa') {
                 return res.status(403).json({ 
                     succeeded: false, 
                     message: "Tài khoản của bạn đã bị khóa do vi phạm điều khoản hệ thống. Vui lòng liên hệ Admin!" 
@@ -73,7 +79,12 @@ export default class userController {
             const token = await userController.generateToken(user);
             return res.status(200).json({
                 succeeded: true,
-                token: token
+                token: token,
+                user: {
+                    id: user.MaNguoiDung,
+                    email: user.Email,
+                    role: user.VaiTro // Database đang lưu là 'admin' hoặc 'khach_hang'
+                }
             });
         }
         catch(error) {
@@ -192,9 +203,12 @@ export default class userController {
     static async adminLogin(req, res) {
         try {
             const { email, password } = req.body;
+        
+        // THÊM DÒNG NÀY: Chuẩn hóa email
+        const normalizedEmail = email.toLowerCase().trim(); 
 
-            // 1. Tìm user trong database bằng email
-            const user = await userModel.findByUsername(email); 
+        // 1. Tìm user trong database bằng email đã chuẩn hóa
+        const user = await userModel.findByUsername(normalizedEmail);
             if (!user) {
                 return res.status(401).json({ succeeded: false, message: "Email Admin không tồn tại!" });
             }
@@ -338,7 +352,7 @@ export default class userController {
             }
 
             // 3. Tiến hành khóa hoặc mở khóa
-            const newStatus = action === 'lock' ? 'locked' : 'active';
+            const newStatus = action === 'lock' ? 'Khoa' : 'HoatDong';
             const isUpdated = await userModel.updateAccountStatus(userId, newStatus);
 
             if (isUpdated) {
@@ -351,4 +365,27 @@ export default class userController {
             return res.status(500).json({ succeeded: false, message: error.message });
         }
     }
+
+    // =========================================================
+    // CONTROLLER: NÂNG CẤP QUYỀN THÀNH CẢ HAI
+    // =========================================================
+    static async upgradeRole(req, res) {
+        try {
+            const userId = req.userid; // Lấy ID từ token đăng nhập
+            if (!userId) return res.status(401).json({ succeeded: false, message: "Unauthorized" });
+
+            const isUpdated = await userModel.upgradeRoleToBoth(userId);
+            if (isUpdated) {
+                return res.status(200).json({ 
+                    succeeded: true, 
+                    message: "Nâng cấp thành công! Bây giờ bạn có thể vừa thuê vừa cho thuê." 
+                });
+            } else {
+                return res.status(400).json({ succeeded: false, message: "Không thể nâng cấp tài khoản." });
+            }
+        } catch (error) {
+            return res.status(500).json({ succeeded: false, message: error.message });
+        }
+    }
+
 }

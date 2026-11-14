@@ -76,46 +76,14 @@ adminAuthRoutes.get('/users', userController.getAllUsers);
 /**
  * @swagger
  * /admin/orders:
- *   get:
- *     summary: Lấy danh sách tất cả hóa đơn (Admin)
- *     tags: [Admin Orders]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lấy danh sách thành công
+ *   get: { summary: "Lấy danh sách tất cả hóa đơn (Admin)", tags: [Admin], security: [{ bearerAuth: [] }] }
  */
-adminAuthRoutes.get('/orders', orderController.getAllOrder);
+adminAuthRoutes.get('/orders', orderController.getAllOrders);
 
 /**
  * @swagger
  * /admin/approve-order/{orderId}:
- *   patch:
- *     summary: Admin thay đổi trạng thái đơn hàng
- *     tags: [Admin Orders]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: orderId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - status
- *             properties:
- *               status:
- *                 type: string
- *                 example: processing
- *     responses:
- *       200:
- *         description: Duyệt đơn hàng thành công
+ *   patch: { summary: "Admin thay đổi trạng thái đơn hàng", tags: [Admin], security: [{ bearerAuth: [] }] }
  */
 adminAuthRoutes.patch('/approve-order/:orderId', orderController.approveOrder);
 

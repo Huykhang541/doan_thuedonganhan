@@ -10,20 +10,20 @@ const options = {
       description: 'Mô tả các API của dự án',
     },
 
-    tags: [
-      {
-        name: "Khách thuê",
-        description: "API dành cho khách thuê đồ",
-      },
-      {
-        name: "Chủ cho thuê",
-        description: "API dành cho chủ cho thuê",
-      },
-      {
-        name: "Admin",
-        description: "API thống kê dành cho Admin",
-      },
-    ],
+    // tags: [
+    //   {
+    //     name: "Khách thuê",
+    //     description: "API dành cho khách thuê đồ",
+    //   },
+    //   {
+    //     name: "Chủ cho thuê",
+    //     description: "API dành cho chủ cho thuê",
+    //   },
+    //   {
+    //     name: "Admin",
+    //     description: "API thống kê dành cho Admin",
+    //   },
+    // ],
 
     
 

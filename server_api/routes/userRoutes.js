@@ -264,4 +264,19 @@ authRoutes.put('/updateprofile',userController.updateUser);
 authRoutes.patch('/change-password',userController.changePassword);
 
 userRoutes.use('/',authRoutes);
+
+/**
+ * @swagger
+ * /upgrade-role:
+ *   patch:
+ *     summary: Nâng cấp tài khoản lên Cả hai (Vừa thuê vừa cho thuê)
+ *     tags:
+ *       - Users
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Nâng cấp thành công
+ */
+authRoutes.patch('/upgrade-role', userController.upgradeRole);
 export default userRoutes;

@@ -1,6 +1,6 @@
 import express from "express";
 import reviewsController from "../controllers/reviewsController.js";
-import auth from "../middleware/auth.js"; // Import đúng middleware auth của dự án
+import auth from "../middleware/auth.js"; 
 
 const router = express.Router();
 
@@ -9,7 +9,7 @@ const router = express.Router();
  * /api/reviews/{product_id}:
  *   get:
  *     summary: Lấy danh sách đánh giá của 1 sản phẩm
- *     tags: [Reviews]
+ *     tags: [1. Khách Hàng - Public]
  *     parameters:
  *       - in: path
  *         name: product_id
@@ -27,7 +27,7 @@ router.get("/:product_id", reviewsController.getReviewProduct);
  * /api/reviews/add:
  *   post:
  *     summary: Thêm đánh giá mới cho sản phẩm (Cần đăng nhập)
- *     tags: [Reviews]
+ *     tags: [1. Khách Hàng - Public]
  *     security:
  *       - bearerAuth: [] 
  *     requestBody:

@@ -10,51 +10,72 @@ export default class orderModel {
     }
 
     static async checkout(userId, shippingData, couponCode, payment_method, orderItems, is_buy_now) {
-        const { beginTransaction, commitTransaction, rollbackTransaction, execute } = await import("../config/db.js");
         const conn = await beginTransaction(); 
 
         try {
             if (!orderItems || orderItems.length === 0) throw new Error("Danh sách sản phẩm trống!");
 
-            const dateThue = new Date(shippingData.NgayThue);
-            const dateTra = new Date(shippingData.NgayTra);
-            const rentalDays = Math.ceil(Math.abs(dateTra - dateThue) / (1000 * 60 * 60 * 24)) || 1; 
+            const dateThue = new Date(shippingData.NgayThue.split('T')[0]);
+            const dateTra = new Date(shippingData.NgayTra.split('T')[0]);
+            const diffTime = dateTra.getTime() - dateThue.getTime();
+            
+            const rentalDays = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24))); 
 
             let tongTienThueGoc = 0;
             let tongTienCocCoDinh = 0;
-            let firstOwnerId = null; // Lấy chủ sở hữu của sản phẩm đầu tiên làm chủ đơn
+            let firstOwnerId = null; 
 
             for (const item of orderItems) {
-                const productId = item.product_id || item.product_variant_id;
+                const productId = item.productId || item.product_id || item.id; 
                 
-                // Bỏ SoLuongTon vì DB không có
                 const [prodRows] = await conn.execute(
                     "SELECT MaChuSoHuu, TenSanPham, GiaThueTheoNgay, TienCoc FROM sanpham WHERE MaSanPham = ? FOR UPDATE", 
                     [productId]
                 );
 
                 if (prodRows.length === 0) throw new Error(`Không tìm thấy sản phẩm có ID: ${productId}`);
-                const product = prodRows[0];
-                if (!firstOwnerId) firstOwnerId = product.MaChuSoHuu;
+                
+                // [FIX LOGIC]: Chặn việc gom chung đồ của nhiều chủ vào cùng 1 đơn hàng
+                if (!firstOwnerId) {
+                    firstOwnerId = prodRows[0].MaChuSoHuu;
+                } else if (firstOwnerId !== prodRows[0].MaChuSoHuu) {
+                    throw new Error("Tất cả sản phẩm trong một đơn hàng phải thuộc về cùng một chủ. Vui lòng tách đơn!");
+                }
 
-                // Do DB không có cột SoLuong trong chitietdonthue, ta tính gộp tiền dựa vào số lượng khách yêu cầu
                 const quantity = item.quantity || 1;
-                tongTienThueGoc += parseFloat(product.GiaThueTheoNgay) * quantity * rentalDays;
-                tongTienCocCoDinh += parseFloat(product.TienCoc) * quantity;
+                tongTienThueGoc += parseFloat(prodRows[0].GiaThueTheoNgay) * quantity * rentalDays;
+                tongTienCocCoDinh += parseFloat(prodRows[0].TienCoc) * quantity;
             }
 
             let discountRate = 0; 
             if (rentalDays >= 3 && rentalDays <= 6) discountRate = 0.1;
             else if (rentalDays >= 7) discountRate = 0.2;
-            const tienThueSauGiam = tongTienThueGoc * (1 - discountRate);
+            let tienThueSauGiam = tongTienThueGoc * (1 - discountRate);
+
+            if (couponCode) {
+                try {
+                    const [couponRows] = await conn.execute("SELECT discountType, discountValue FROM khuyenmai WHERE code = ? LIMIT 1", [couponCode]);
+                    if (couponRows.length > 0) {
+                        const cp = couponRows[0];
+                        if (cp.discountType === 'percent') {
+                            tienThueSauGiam -= (tienThueSauGiam * (parseFloat(cp.discountValue) / 100));
+                        } else {
+                            tienThueSauGiam -= parseFloat(cp.discountValue);
+                        }
+                    }
+                } catch (e) {
+                    console.log("Thiếu bảng giảm giá hoặc lỗi query: ", e.message);
+                }
+            }
+            if (tienThueSauGiam < 0) tienThueSauGiam = 0;
 
             let PhanTramHoaHong = (rentalDays < 3) ? 5 : (rentalDays <= 7 ? 10 : 15);
             let TienHoaHong = tienThueSauGiam * (PhanTramHoaHong / 100);
             const shippingFee = await this.getShippingFee(shippingData.city);
-            const tongThanhToan = tienThueSauGiam + shippingFee;
+            
+            const tongTienThueThuan = tienThueSauGiam;
             const DiaChiGiaoHang = `${shippingData.address}, ${shippingData.city}`;
 
-            // SỬA: Bỏ NgayBatDau, NgayKetThuc khỏi donthue. Thêm MaChuSoHuu. Đổi 'pending' thành 'cho_duyet'
             const insertOrderSql = `
                 INSERT INTO donthue (
                     MaKhachThue, MaChuSoHuu, PhuongThucGiaoNhan, 
@@ -66,14 +87,14 @@ export default class orderModel {
             
             const [orderResult] = await conn.execute(insertOrderSql, [
                 userId, firstOwnerId, payment_method, DiaChiGiaoHang,
-                shippingData.note || '', tongThanhToan, tongTienCocCoDinh, shippingFee, PhanTramHoaHong, TienHoaHong
+                shippingData.note || '', tongTienThueThuan, tongTienCocCoDinh, shippingFee, PhanTramHoaHong, TienHoaHong
             ]);
 
             const newOrderId = orderResult.insertId;
 
-            // SỬA: Đưa NgayBatDau, NgayKetThuc vào chitietdonthue. Bỏ cột SoLuong vì DB không có.
             for (const item of orderItems) {
-                const productId = item.product_id || item.product_variant_id;
+                const productId = item.productId || item.product_id || item.id;
+                const variantId = item.productVariantId || item.product_variant_id || item.variant_id || null;
                 const quantity = item.quantity || 1;
                 
                 const [pRows] = await conn.execute("SELECT MaChuSoHuu, GiaThueTheoNgay, TienCoc FROM sanpham WHERE MaSanPham = ?", [productId]);
@@ -83,12 +104,10 @@ export default class orderModel {
 
                 await conn.execute(
                     `INSERT INTO chitietdonthue (MaDonThue, MaChuSoHuu, MaSanPham, MaBienThe, NgayBatDau, NgayKetThuc, DonGiaThue, TienCocDong, ThanhTien) 
-                     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
-                    [newOrderId, p.MaChuSoHuu, productId, shippingData.NgayThue, shippingData.NgayTra, p.GiaThueTheoNgay, itemCoc, itemThanhTien]
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [newOrderId, p.MaChuSoHuu, productId, variantId, shippingData.NgayThue, shippingData.NgayTra, p.GiaThueTheoNgay, itemCoc, itemThanhTien]
                 );
             }
-
-            if (!is_buy_now) await conn.execute("DELETE FROM giohang WHERE MaNguoiDung = ?", [userId]); 
 
             await commitTransaction(conn);
             return newOrderId;
@@ -102,14 +121,14 @@ export default class orderModel {
     static async cancelOrder(order_id){
         const conn = await beginTransaction();
         try {
-            const [order] = await conn.query("SELECT TrangThaiDon AS status FROM donthue WHERE MaDonThue = ?", [order_id]);
+            // [FIX]: Sử dụng FOR UPDATE để lock row và đổi thành conn.execute
+            const [order] = await conn.execute("SELECT TrangThaiDon AS status FROM donthue WHERE MaDonThue = ? FOR UPDATE", [order_id]);
             if (order.length === 0) throw new Error("Không tìm thấy đơn thuê");
             
             if (order[0].status !== 'cho_duyet') {
                 throw new Error('Chỉ có thể hủy đơn khi đang chờ duyệt. Đơn của bạn đã được xử lý!');
             }
-            // Mặc định hủy đơn (cần đảm bảo CSDL bạn có Enum cancelled hoặc tu_choi, ở đây mình dùng cancelled)
-            await conn.query("UPDATE donthue SET TrangThaiDon = 'cancelled' WHERE MaDonThue = ?", [order_id]);
+            await conn.execute("UPDATE donthue SET TrangThaiDon = 'cancelled' WHERE MaDonThue = ?", [order_id]);
             await commitTransaction(conn);
             return true;
         } catch(error){
@@ -118,22 +137,27 @@ export default class orderModel {
         }
     }
 
+    // Các hàm getOrderDetail, getListOrderByUserID, getAllOrder giữ nguyên...
     static async getOrderDetail(order_ID){
         try {
-            // SỬA: Lấy NgayBatDau, NgayKetThuc từ chitietdonthue thay vì donthue
             const [orderDetail] = await execute(`
                 SELECT 
                     d.MaDonThue, d.MaKhachThue, d.MaChuSoHuu, d.DiaChiGiaoHang, d.PhuongThucGiaoNhan, d.GhiChu, 
                     d.NgayTraThucTe, d.TongTienThue, d.TongTienCoc, d.PhiGiaoHang, 
                     d.PhanTramHoaHong, d.TienHoaHong, d.SoTienCocHoanTra, d.TienPhat,
                     d.TrangThaiDon as status, d.TrangThaiGiaoHang, d.NgayTao,
-                    ct.MaChiTietDon, ct.MaSanPham, ct.NgayBatDau, ct.NgayKetThuc, ct.ThanhTien,
-                    sp.TenSanPham, sp.GiaThueTheoNgay
+                    ct.MaChiTietDon, ct.MaSanPham, ct.MaBienThe, ct.NgayBatDau, ct.NgayKetThuc, 
+                    ct.DonGiaThue, ct.TienCocDong, ct.ThanhTien,
+                    sp.TenSanPham, 
+                    bt.DuongDanAnh AS imageUrl, bt.MauSac,
+                    nd.HoTen, nd.SoDienThoai 
                 FROM donthue d
                 JOIN chitietdonthue ct ON d.MaDonThue = ct.MaDonThue 
                 JOIN sanpham sp ON ct.MaSanPham = sp.MaSanPham
+                LEFT JOIN bienthesanpham bt ON ct.MaBienThe = bt.MaBienThe
+                JOIN nguoidung nd ON d.MaKhachThue = nd.MaNguoiDung 
                 WHERE d.MaDonThue = ?
-            `, [order_ID]);
+            `, [order_ID]); 
             return orderDetail;
         } catch(error){
             throw new Error('Lỗi lấy chi tiết đơn: ' + error.message);
@@ -159,13 +183,14 @@ export default class orderModel {
     }
 
     static async returnOrder(order_id, tien_phat_thu_cong, ghi_chu) {
+        // [FIX]: Bọc logic hoàn trả vào Transaction để đảm bảo an toàn
+        const conn = await beginTransaction();
         try {
-            // SỬA: Phải Join để lấy NgayKetThuc từ chitietdonthue
-            const [orders] = await execute(
+            const [orders] = await conn.execute(
                 `SELECT d.TongTienCoc, d.TrangThaiDon, d.TongTienThue, ct.NgayKetThuc 
                  FROM donthue d
                  JOIN chitietdonthue ct ON d.MaDonThue = ct.MaDonThue 
-                 WHERE d.MaDonThue = ? LIMIT 1`, 
+                 WHERE d.MaDonThue = ? LIMIT 1 FOR UPDATE`, 
                 [order_id]
             );
             
@@ -205,18 +230,21 @@ export default class orderModel {
                     GhiChu = CONCAT(IFNULL(GhiChu, ''), ?)
                 WHERE MaDonThue = ?
             `;
-            const [result] = await execute(sql, [tongTienPhat, tienCocHoanTra, finalNote, order_id]);
+            const [result] = await conn.execute(sql, [tongTienPhat, tienCocHoanTra, finalNote, order_id]);
+            await commitTransaction(conn);
             return result.affectedRows > 0;
         } catch (error) {
+            await rollbackTransaction(conn);
             throw new Error("Lỗi xử lý trả đồ: " + error.message);
         }
     }
 
+    // Các hàm Get thống kê giữ nguyên
     static async getDashboardStats() {
         try {
             const [totalOrdersRows] = await execute("SELECT COUNT(*) AS total FROM donthue");
             const [revenueRows] = await execute("SELECT SUM(TongTienThue) AS total FROM donthue WHERE TrangThaiDon = 'completed'");
-            const [totalUsersRows] = await execute("SELECT COUNT(*) AS total FROM nguoidung WHERE VaiTro = 'user'");
+            const [totalUsersRows] = await execute("SELECT COUNT(*) AS total FROM nguoidung WHERE VaiTro IN ('khach_hang', 'ca_hai')");
             const [pendingOrdersRows] = await execute("SELECT COUNT(*) AS total FROM donthue WHERE TrangThaiDon = 'cho_duyet'");
 
             return {
@@ -259,7 +287,6 @@ export default class orderModel {
     }
 
     static async insertComplaint(orderId, userId, loaiKhieuNai, lyDo, hinhAnh) {
-        const { beginTransaction, commitTransaction, rollbackTransaction } = await import("../config/db.js");
         const conn = await beginTransaction();
         try {
             const [orderCheck] = await conn.execute(
@@ -287,9 +314,7 @@ export default class orderModel {
     }
 
     static async resolveComplaint(complaintId, adminId, hinhThucId, soTien, noiDung, trangThaiDonMoi) {
-        const { beginTransaction, commitTransaction, rollbackTransaction } = await import("../config/db.js");
         const conn = await beginTransaction();
-
         try {
             const systemWalletId = 5;
             const [complaintRows] = await conn.execute(
@@ -312,7 +337,6 @@ export default class orderModel {
             const customerWalletId = tenantWallet[0]?.MaVi;
             const hostWalletId = hostWallet[0]?.MaVi;
 
-            // SỬA: Khớp Enum bảng giaodichvi -> 'ThanhCong', 'HoanTien', 'GiaiNgan'
             if (hinhThucId == 1) {
                 await conn.execute("UPDATE vi SET SoTienDongBang = SoTienDongBang - ?, NgayCapNhat = NOW() WHERE MaVi = ?", [amountToProcess, systemWalletId]);
                 await conn.execute("UPDATE vi SET SoDuKhaDung = SoDuKhaDung + ?, NgayCapNhat = NOW() WHERE MaVi = ?", [amountToProcess, customerWalletId]);
@@ -354,15 +378,12 @@ export default class orderModel {
     }
 
     static async getPendingComplaints() {
-        const { execute } = await import("../config/db.js");
         const [rows] = await execute(`SELECT kn.*, nd.HoTen AS TenNguoiKhieuNai FROM khieunai kn LEFT JOIN nguoidung nd ON kn.MaNguoiKhieuNai = nd.MaNguoiDung WHERE kn.TrangThai = 'Chờ xử lý' ORDER BY kn.NgayKhieuNai DESC`);
         return rows;
     }
 
     static async processPaymentEscrow(orderId, customerUserId, totalAmount) {
-        const { beginTransaction, commitTransaction, rollbackTransaction } = await import("../config/db.js");
         const conn = await beginTransaction();
-
         try {
             const systemWalletId = 5; 
             const [customerWalletRows] = await conn.execute("SELECT MaVi, SoDuKhaDung FROM vi WHERE MaNguoiDung = ? FOR UPDATE", [customerUserId]);
@@ -374,7 +395,6 @@ export default class orderModel {
             await conn.execute("UPDATE vi SET SoDuKhaDung = SoDuKhaDung - ?, NgayCapNhat = NOW() WHERE MaVi = ?", [totalAmount, customerWallet.MaVi]);
             await conn.execute("UPDATE vi SET SoTienDongBang = SoTienDongBang + ?, NgayCapNhat = NOW() WHERE MaVi = ?", [totalAmount, systemWalletId]);
 
-            // SỬA: Đổi 'Thành công' thành 'ThanhCong' để khớp Enum bảng giaodichvi
             await conn.execute(
                 `INSERT INTO giaodichvi (MaVi, MaViDoiTac, MaDonThue, LoaiGiaoDich, SoTien, TrangThai, NgayGiaoDich) VALUES (?, ?, ?, 'ThanhToan', ?, 'ThanhCong', NOW())`,
                 [customerWallet.MaVi, systemWalletId, orderId, totalAmount]
@@ -394,9 +414,7 @@ export default class orderModel {
     }
 
     static async completeOrderAndPayout(orderId) {
-        const { beginTransaction, commitTransaction, rollbackTransaction } = await import("../config/db.js");
         const conn = await beginTransaction();
-
         try {
             const systemWalletId = 5; 
             const [orderRows] = await conn.execute(
@@ -444,5 +462,6 @@ export default class orderModel {
             await rollbackTransaction(conn);
             throw error;
         }
+        
     }
 }

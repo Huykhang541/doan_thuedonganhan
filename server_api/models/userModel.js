@@ -83,7 +83,7 @@ export default class userModel{
             const address = data.address || data.Address || '';
             
             // ĐOẠN ĐƯỢC SỬA: Lấy data.VaiTro từ Controller gửi xuống, nếu không có mới dùng logic cũ
-            const vaiTro = data.VaiTro || (data.is_admin ? 'Admin' : 'KhachHang');
+            const vaiTro = data.VaiTro || 'khach_hang';
 
             const [result] = await execute(
                 'INSERT INTO `NguoiDung`(`HoTen`, `Email`, `MatKhau`, `SoDienThoai`, `DiaChiNguoiDung`, `VaiTro`, `TrangThaiTaiKhoan`, `NgayTao`) VALUES (?,?,?,?,?,?,?, NOW())',
@@ -189,6 +189,23 @@ export default class userModel{
             return result.affectedRows > 0;
         } catch (error) {
             throw new Error("Lỗi cập nhật trạng thái tài khoản: " + error.message);
+        }
+    }
+
+
+
+    // =========================================================
+    // MODEL: NÂNG CẤP TÀI KHOẢN THÀNH "CẢ HAI"
+    // =========================================================
+    static async upgradeRoleToBoth(userId) {
+        try {
+            const [result] = await execute(
+                "UPDATE NguoiDung SET VaiTro = 'ca_hai' WHERE MaNguoiDung = ?",
+                [userId]
+            );
+            return result.affectedRows > 0;
+        } catch (error) {
+            throw new Error("Lỗi nâng cấp tài khoản: " + error.message);
         }
     }
 }

@@ -2,7 +2,7 @@ import { execute } from "../config/db.js";
 
 export default class reviewsModel {
     
-    // 1. Lấy danh sách đánh giá của sản phẩm
+    // 1. Lấy danh sách đánh giá của sản phẩm thông qua bảng chitietdonthue
     static async getReviewsByProductId(product_id) {
         try {
             const [rows] = await execute(`
@@ -13,7 +13,8 @@ export default class reviewsModel {
                     nd.HoTen AS fullname 
                 FROM danhgia dg
                 JOIN nguoidung nd ON dg.MaNguoiDung = nd.MaNguoiDung 
-                WHERE dg.MaSanPham = ?
+                JOIN chitietdonthue ct ON dg.MaChiTietDon = ct.MaChiTietDon
+                WHERE ct.MaSanPham = ?
                 ORDER BY dg.NgayDanhGia DESC
             `, [product_id]);
 
@@ -25,7 +26,6 @@ export default class reviewsModel {
                 };
             }
 
-            // Tính toán tổng số sao và trung bình cộng sao
             let totalRating = 0;
             rows.forEach((r) => {
                 totalRating += r.rating;
@@ -42,22 +42,22 @@ export default class reviewsModel {
         }
     }
 
-    // 2. Thêm đánh giá mới (Kiểm tra xem user đã thuê và hoàn thành đơn chưa)
+    // 2. Thêm đánh giá mới
     static async addReview(review, product_id, user_id) {
         try {
-            // Kiểm tra xem khách đã thuê sản phẩm này và đơn đã hoàn tất ('completed' hoặc 'resolved')
+            // Lấy trực tiếp MaChiTietDon và MaChuSoHuu từ chitietdonthue mà không cần join bảng sanpham
             const queryCheck = `
-                SELECT dt.MaDonThue as found_order_id
+                SELECT ct.MaChiTietDon, ct.MaChuSoHuu as NguoiBiDanhGia
                 FROM donthue dt
                 JOIN chitietdonthue ct ON dt.MaDonThue = ct.MaDonThue
                 WHERE 
                     dt.MaKhachThue = ?                
                     AND ct.MaSanPham = ?      
-                    AND dt.TrangThaiDon IN ('completed', 'resolved') -- Đã sửa khớp với database thực tế
+                    AND dt.TrangThaiDon IN ('completed', 'resolved') 
                     AND NOT EXISTS (           
                         SELECT 1 FROM danhgia dg 
                         WHERE dg.MaNguoiDung = dt.MaKhachThue 
-                        AND dg.MaSanPham = ct.MaSanPham
+                        AND dg.MaChiTietDon = ct.MaChiTietDon
                     )
                 ORDER BY dt.NgayTao DESC     
                 LIMIT 1;
@@ -66,16 +66,16 @@ export default class reviewsModel {
             const [checkRows] = await execute(queryCheck, [user_id, product_id]);
 
             if (checkRows.length > 0) {
-                const orderId = checkRows[0].found_order_id;
+                const { MaChiTietDon, NguoiBiDanhGia } = checkRows[0];
 
                 const [result] = await execute(
-                    'INSERT INTO `danhgia` (`MaNguoiDung`, `MaSanPham`, `MaDonThue`, `SoSao`, `BinhLuan`, `NgayDanhGia`) VALUES (?, ?, ?, ?, ?, NOW())',
-                    [user_id, product_id, orderId, review.rating, review.comment]
+                    'INSERT INTO `danhgia` (`MaChiTietDon`, `MaNguoiDung`, `NguoiBiDanhGia`, `SoSao`, `BinhLuan`, `TrangThai`, `NgayDanhGia`) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+                    [MaChiTietDon, user_id, NguoiBiDanhGia, review.rating, review.comment, 'HienThi']
                 );
 
                 return result.affectedRows > 0 ? result.insertId : null;
             } else {
-                throw new Error('Bạn chỉ có thể đánh giá sau khi đơn thuê đã hoàn thành (completed)!');
+                throw new Error('Bạn chỉ có thể đánh giá sau khi đơn thuê đã hoàn thành hoặc bạn đã đánh giá đơn này rồi!');
             }
         } catch (error) {
             throw new Error('Lỗi thêm đánh giá: ' + error.message);
